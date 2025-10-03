@@ -6,6 +6,7 @@ import SearchInterface from './components/SearchInterface'
 import FileUpload from './components/FileUpload'
 import ResultsDisplay from './components/ResultsDisplay'
 import Sidebar from './components/Sidebar'
+import DocumentQA from './components/DocumentQA'
 import { Search, Upload, FileText, Image, Mic, Brain } from 'lucide-react'
 
 function App() {
@@ -104,6 +105,10 @@ function App() {
                       <ResultsDisplay results={searchResults} />
                     )}
                   </div>
+                )}
+
+                {activeTab === 'qa' && (
+                  <DocumentQA />
                 )}
 
                 {activeTab === 'upload' && (

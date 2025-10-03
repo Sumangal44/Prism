@@ -1,10 +1,11 @@
 import React from 'react'
 import { motion } from 'framer-motion'
-import { Search, Upload, FileText, History, BarChart3 } from 'lucide-react'
+import { Search, Upload, FileText, MessageCircle, History, BarChart3 } from 'lucide-react'
 
 const Sidebar = ({ activeTab, setActiveTab }) => {
   const menuItems = [
     { id: 'search', label: 'Search', icon: Search },
+    { id: 'qa', label: 'Document Q&A', icon: MessageCircle },
     { id: 'upload', label: 'Upload Files', icon: Upload },
     { id: 'files', label: 'My Files', icon: FileText },
     { id: 'history', label: 'Search History', icon: History },

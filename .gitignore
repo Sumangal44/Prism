@@ -59,3 +59,58 @@ build/
 # Temporary files
 *.tmp
 *.temp
+
+# Model files and data
+models/llm/*.gguf
+models/llm/*.bin
+models/llm/*.safetensors
+models/embed/*.bin
+models/embed/*.safetensors
+models/embed/*.gguf
+
+# Data directories
+data/uploads/*
+data/processed/*
+data/indices/*
+!data/uploads/.gitkeep
+!data/processed/.gitkeep
+!data/indices/.gitkeep
+
+# Backend data
+backend/data/uploads/*
+backend/data/processed/*
+!backend/data/uploads/.gitkeep
+!backend/data/processed/.gitkeep
+
+# Large files
+*.gguf
+*.bin
+*.safetensors
+*.h5
+*.pkl
+*.pickle
+*.parquet
+
+# Audio/Video files
+*.mp3
+*.wav
+*.m4a
+*.mp4
+*.avi
+*.mov
+
+# Image files (if large datasets)
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.bmp
+*.tiff
+
+# Document files (uploaded content)
+data/**/*.pdf
+data/**/*.docx
+data/**/*.doc
+backend/data/**/*.pdf
+backend/data/**/*.docx
+backend/data/**/*.doc
