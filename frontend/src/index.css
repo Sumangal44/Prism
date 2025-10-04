@@ -79,6 +79,10 @@
   color: var(--primary-600);
 }
 
+.bg-primary-500 {
+  background-color: var(--primary-500);
+}
+
 .bg-primary-600 {
   background-color: var(--primary-600);
 }
@@ -91,4 +95,44 @@
 
 .focus\:ring-primary-500:focus {
   --tw-ring-color: var(--primary-500);
+}
+
+/* Additional responsive utilities */
+.line-clamp-2 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.line-clamp-3 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+/* Responsive search container */
+@media (max-width: 640px) {
+  .search-container {
+    padding: 0.75rem;
+    border-radius: 0.75rem;
+    margin: 0.5rem;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 768px) {
+  .search-container {
+    padding: 1rem;
+    border-radius: 0.75rem;
+  }
+}
+
+/* Enhanced responsive utilities */
+@media (max-width: 475px) {
+  .card-hover:hover {
+    transform: none; /* Disable hover effects on very small screens */
+  }
 }
