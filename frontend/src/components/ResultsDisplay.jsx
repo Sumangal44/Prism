@@ -1,4 +1,3 @@
-import React from 'react'
 import { motion } from 'framer-motion'
 import { FileText, Image, Mic, ExternalLink, Star, Clock } from 'lucide-react'
 

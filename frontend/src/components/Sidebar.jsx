@@ -1,4 +1,3 @@
-import React from 'react'
 import { motion } from 'framer-motion'
 import { Search, Upload, FileText, MessageCircle, History, BarChart3 } from 'lucide-react'
 
