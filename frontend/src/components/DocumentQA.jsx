@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { MessageCircle, Send, FileText, Upload, Bot, User, Copy, ThumbsUp, ThumbsDown, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import HardwareToggle from './HardwareToggle'
 
 const DocumentQA = () => {
   const [messages, setMessages] = useState([])
@@ -292,6 +293,11 @@ const DocumentQA = () => {
               ))}
             </div>
           )}
+        </div>
+        
+        {/* Hardware Toggle */}
+        <div className="p-4 border-t border-gray-200">
+          <HardwareToggle />
         </div>
       </div>
 
