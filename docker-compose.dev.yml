@@ -1,0 +1,59 @@
+version: "3.8"
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: base  # Use base stage for development
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app:rw  # Mount source for live reload
+      - ./data:/app/data:rw
+      - ./models:/app/models:ro
+      - backend_dev_cache:/app/.cache
+    environment:
+      - PYTHONPATH=/app
+      - UVICORN_RELOAD=1
+      - UVICORN_WORKERS=1
+      - UVICORN_LOOP=asyncio
+      - PYTHONUNBUFFERED=1
+    command: ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+    restart: unless-stopped
+    networks:
+      - prism-dev-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: base  # Use base stage for development
+    ports:
+      - "3000:5173"  # Vite dev server port
+    volumes:
+      - ./frontend:/app:rw  # Mount source for live reload
+      - /app/node_modules  # Anonymous volume for node_modules
+    environment:
+      - VITE_API_URL=http://localhost:8000
+      - NODE_ENV=development
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - prism-dev-network
+
+volumes:
+  backend_dev_cache:
+    driver: local
+
+networks:
+  prism-dev-network:
+    driver: bridge

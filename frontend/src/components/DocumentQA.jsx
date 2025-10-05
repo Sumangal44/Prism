@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { MessageCircle, Send, FileText, Upload, Bot, User, Copy, ThumbsUp, ThumbsDown, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import HardwareToggle from './HardwareToggle'
+import { api } from '../services/api'
 
 const DocumentQA = () => {
   const [messages, setMessages] = useState([])
@@ -28,13 +29,13 @@ const DocumentQA = () => {
 
   const fetchDocuments = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/documents')
-      const data = await response.json()
+      const data = await api.listDocuments()
       if (data.success) {
         setUploadedDocuments(data.documents)
       }
     } catch (error) {
       console.error('Error fetching documents:', error)
+      toast.error(`Failed to load documents: ${error.message}`)
     }
   }
 
@@ -42,17 +43,10 @@ const DocumentQA = () => {
     const file = event.target.files[0]
     if (!file) return
 
-    const formData = new FormData()
-    formData.append('file', file)
-
     setIsLoading(true)
     try {
-      const response = await fetch('http://localhost:8000/api/upload', {
-        method: 'POST',
-        body: formData,
-      })
-
-      const data = await response.json()
+      const data = await api.uploadDocument(file)
+      
       if (data.success) {
         toast.success(`Document "${file.name}" uploaded and processed successfully!`)
         setUploadedDocuments(prev => [...prev, {
@@ -74,7 +68,7 @@ const DocumentQA = () => {
         toast.error(data.detail || 'Failed to upload document')
       }
     } catch (error) {
-      toast.error('Error uploading document')
+      toast.error(`Upload failed: ${error.message}`)
       console.error('Upload error:', error)
     } finally {
       setIsLoading(false)
@@ -99,18 +93,7 @@ const DocumentQA = () => {
     setIsLoading(true)
 
     try {
-      const response = await fetch('http://localhost:8000/api/question', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          question: inputValue,
-          file_id: selectedDocument || null
-        }),
-      })
-
-      const data = await response.json()
+      const data = await api.askQuestion(inputValue, selectedDocument || null)
       
       const assistantMessage = {
         id: Date.now() + 1,
@@ -136,7 +119,7 @@ const DocumentQA = () => {
         success: false
       }
       setMessages(prev => [...prev, errorMessage])
-      toast.error('Error sending message')
+      toast.error(`Failed to get response: ${error.message}`)
       console.error('Send message error:', error)
     } finally {
       setIsLoading(false)

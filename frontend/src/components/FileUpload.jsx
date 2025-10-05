@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { useDropzone } from 'react-dropzone'
 import { Upload, FileText, Image, Mic, X, CheckCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { api } from '../services/api'
 
 const FileUpload = ({ onFileUpload, uploadedFiles }) => {
   const [uploading, setUploading] = useState(false)
@@ -12,24 +13,12 @@ const FileUpload = ({ onFileUpload, uploadedFiles }) => {
 
     setUploading(true);
     const uploadPromises = acceptedFiles.map(async (file) => {
-      const formData = new FormData();
-      formData.append('file', file);
-
       try {
-        const response = await fetch('http://localhost:8000/api/upload', {
-          method: 'POST',
-          body: formData,
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.detail || 'Upload failed');
-        }
-
-        const result = await response.json();
+        const result = await api.uploadDocument(file);
         toast.success(`${file.name} uploaded successfully!`);
         return { ...file, ...result }; // Combine file info with backend response
       } catch (error) {
+        console.error(`Upload failed for ${file.name}:`, error);
         toast.error(`Upload failed for ${file.name}: ${error.message}`);
         return null;
       }

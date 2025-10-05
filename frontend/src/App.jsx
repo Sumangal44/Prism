@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import  { useState } from 'react'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Toaster } from 'react-hot-toast'
@@ -19,14 +19,14 @@ function App() {
 
   const handleSearch = async (query) => {
     setIsLoading(true)
-    // Simulate API call
+    // Simulate API call using the query parameter
     setTimeout(() => {
       setSearchResults([
         {
           id: 1,
           type: 'document',
           title: 'International Development Report 2024',
-          content: 'This report discusses the key aspects of international development initiatives...',
+          content: `Results for: "${query}". This report discusses the key aspects of international development initiatives...`,
           source: 'doc_2024.pdf',
           page: 7,
           citations: [1, 2],
@@ -36,7 +36,7 @@ function App() {
           id: 2,
           type: 'audio',
           title: 'Meeting Recording - Budget Discussion',
-          content: 'Budget allocation for 2023 projects was discussed in detail...',
+          content: `Results for: "${query}". Budget allocation for 2023 projects was discussed in detail...`,
           source: 'meeting_20240301.wav',
           timestamp: '00:14:32',
           citations: [3],
@@ -46,7 +46,7 @@ function App() {
           id: 3,
           type: 'image',
           title: 'Account Statement Screenshot',
-          content: 'Screenshot showing account details and transaction history...',
+          content: `Results for: "${query}". Screenshot showing account details and transaction history...`,
           source: 'screenshot_1432.png',
           boundingBox: { x: 120, y: 80, width: 300, height: 200 },
           citations: [4],

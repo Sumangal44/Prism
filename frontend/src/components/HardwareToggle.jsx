@@ -1,8 +1,8 @@
-import  { useState, useEffect } from 'react'
+import  { useState, useEffect, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { Cpu, Zap, AlertCircle, CheckCircle, RefreshCw } from 'lucide-react'
 import toast from 'react-hot-toast'
-import axios from 'axios'
+import { api } from '../services/api'
 
 const HardwareToggle = () => {
   const [hardwareInfo, setHardwareInfo] = useState({
@@ -15,10 +15,10 @@ const HardwareToggle = () => {
   const [isInitialLoad, setIsInitialLoad] = useState(true)
 
   // Fetch current hardware status
-  const fetchHardwareStatus = async () => {
+  const fetchHardwareStatus = useCallback(async () => {
     try {
-      const response = await axios.get('http://localhost:8000/api/model/status')
-      setHardwareInfo(response.data)
+      const data = await api.getModelStatus()
+      setHardwareInfo(data)
       setIsInitialLoad(false)
     } catch (error) {
       console.error('Failed to fetch hardware status:', error)
@@ -26,7 +26,7 @@ const HardwareToggle = () => {
         setIsInitialLoad(false)
       }
     }
-  }
+  }, [isInitialLoad])
 
   // Toggle hardware mode
   const toggleHardware = async () => {
@@ -37,22 +37,22 @@ const HardwareToggle = () => {
 
     setIsLoading(true)
     try {
-      const response = await axios.post('http://localhost:8000/api/model/toggle-hardware')
+      const data = await api.toggleHardware()
       
-      if (response.data.success) {
+      if (data.success) {
         setHardwareInfo(prev => ({
           ...prev,
-          hardware_mode: response.data.current_mode,
-          gpu_layers: response.data.gpu_layers || 0
+          hardware_mode: data.current_mode,
+          gpu_layers: data.gpu_layers || 0
         }))
         
-        toast.success(response.data.message || `Switched to ${response.data.current_mode} mode`)
+        toast.success(data.message || `Switched to ${data.current_mode} mode`)
       } else {
-        toast.error(response.data.error || 'Failed to toggle hardware mode')
+        toast.error(data.error || 'Failed to toggle hardware mode')
       }
     } catch (error) {
       console.error('Toggle error:', error)
-      toast.error(error.response?.data?.detail || 'Failed to toggle hardware mode')
+      toast.error(`Hardware toggle failed: ${error.message}`)
     } finally {
       setIsLoading(false)
     }
@@ -69,7 +69,7 @@ const HardwareToggle = () => {
     // Refresh status every 10 seconds
     const interval = setInterval(fetchHardwareStatus, 10000)
     return () => clearInterval(interval)
-  }, [])
+  }, [fetchHardwareStatus])
 
   const isGpuMode = hardwareInfo.hardware_mode === 'GPU'
   const canToggle = hardwareInfo.gpu_available && hardwareInfo.model_loaded

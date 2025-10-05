@@ -44,12 +44,38 @@ class QuestionResponse(BaseModel):
 
 @app.get("/")
 async def root():
-    """Health check endpoint"""
+    """Root endpoint"""
     return {
         "message": "Prism Document Q&A API",
         "version": "1.0.0",
-        "llm_ready": mistral_llm.is_ready()
+        "status": "running"
     }
+
+@app.get("/health")
+async def health_check():
+    """Detailed health check endpoint for Docker"""
+    try:
+        llm_status = mistral_llm.is_ready()
+        qa_status = qa_service is not None
+        
+        return {
+            "status": "healthy" if llm_status and qa_status else "degraded",
+            "version": "1.0.0",
+            "components": {
+                "llm_service": "healthy" if llm_status else "unhealthy",
+                "qa_service": "healthy" if qa_status else "unhealthy"
+            },
+            "uptime": "running"
+        }
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "unhealthy",
+                "error": str(e)
+            }
+        )
 
 @app.post("/api/upload", response_model=dict)
 async def upload_document(file: UploadFile = File(...)):
