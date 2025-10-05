@@ -2,6 +2,7 @@
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 python-multipart==0.0.6
+aiofiles==23.2.1
 
 # Document processing
 PyPDF2==3.0.1
@@ -15,5 +16,5 @@ tiktoken==0.5.1
 langchain-text-splitters==0.0.1
 
 # Utilities
-aiofiles==23.2.1
-pydantic==2.4.2 
+pydantic==2.7.4
+pydantic-core==2.18.4

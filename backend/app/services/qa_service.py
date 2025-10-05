@@ -9,15 +9,21 @@ from pathlib import Path
 import logging
 import sys
 
-# Add the backend directory to the Python path
-backend_dir = Path(__file__).parent.parent.parent
-sys.path.append(str(backend_dir))
-
-from ingestion.parse_pdf import parse_document
-from ingestion.chunker import document_chunker
-from .llm_service import mistral_llm
-
 logger = logging.getLogger(__name__)
+
+# Add the backend directory to the Python path for ingestion modules
+backend_dir = Path(__file__).parent.parent.parent
+if str(backend_dir) not in sys.path:
+    sys.path.insert(0, str(backend_dir))
+
+try:
+    from ingestion.parse_pdf import parse_document
+    from ingestion.chunker import document_chunker
+except ImportError as e:
+    logger.error(f"Import error for ingestion modules: {e}")
+    raise ImportError(f"Failed to import ingestion modules. Please ensure dependencies are installed: {e}")
+
+from .llm_service import mistral_llm
 
 class DocumentQAService:
     def __init__(self, data_dir: str = "data"):

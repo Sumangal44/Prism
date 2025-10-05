@@ -30,19 +30,43 @@ class MistralLLM:
     
     def _find_model_path(self) -> str:
         """Find the model file in common locations"""
+        model_filename = "mistral-7b-instruct-v0.2.Q4_K_M.gguf"
+        
+        # Get current working directory and script directory
+        cwd = os.getcwd()
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        
         possible_paths = [
-            "../models/llm/mistral-7b-instruct-v0.2.Q4_K_M.gguf",  # From backend directory
-            "../../models/llm/mistral-7b-instruct-v0.2.Q4_K_M.gguf",
-            "models/llm/mistral-7b-instruct-v0.2.Q4_K_M.gguf",
-            "mistral-7b-instruct-v0.2.Q4_K_M.gguf",
-            os.path.expanduser("~/models/mistral-7b-instruct-v0.2.Q4_K_M.gguf")
+            # Relative to current working directory
+            os.path.join(cwd, "models", "llm", model_filename),
+            
+            # Relative to backend directory (parent of app)
+            os.path.join(os.path.dirname(os.path.dirname(script_dir)), "models", "llm", model_filename),
+            
+            # Relative to project root (2 levels up from app/services)
+            os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(script_dir))), "models", "llm", model_filename),
+            
+            # Legacy paths for compatibility
+            "../models/llm/" + model_filename,
+            "../../models/llm/" + model_filename,
+            "models/llm/" + model_filename,
+            model_filename,
+            
+            # User home directory
+            os.path.expanduser(f"~/models/{model_filename}"),
+            os.path.expanduser(f"~/.cache/prism/{model_filename}")
         ]
         
         for path in possible_paths:
-            if os.path.exists(path):
-                return path
+            abs_path = os.path.abspath(path)
+            if os.path.exists(abs_path):
+                logger.info(f"Found model at: {abs_path}")
+                return abs_path
         
-        return "../models/llm/mistral-7b-instruct-v0.2.Q4_K_M.gguf"
+        # Return default path for first-time setup
+        default_path = os.path.join(cwd, "models", "llm", model_filename)
+        logger.warning(f"Model not found. Please download {model_filename} to: {default_path}")
+        return default_path
     
     def _load_model(self):
         """Load the Mistral model"""
