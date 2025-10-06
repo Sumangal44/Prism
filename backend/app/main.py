@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, Form
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -7,9 +7,11 @@ import shutil
 from pathlib import Path
 import logging
 from typing import Optional
+import uuid
 
 from .services.qa_service import qa_service
 from .services.llm_service import mistral_llm
+from .services.progress_service import progress_service
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -42,6 +44,16 @@ class QuestionResponse(BaseModel):
     chunks_used: Optional[int] = None
     error: Optional[str] = None
 
+class ChatRequest(BaseModel):
+    message: str
+    conversation_history: Optional[list] = []
+
+class ChatResponse(BaseModel):
+    success: bool
+    response: Optional[str] = None
+    model_info: Optional[dict] = None
+    error: Optional[str] = None
+
 @app.get("/")
 async def root():
     """Health check endpoint"""
@@ -51,10 +63,57 @@ async def root():
         "llm_ready": mistral_llm.is_ready()
     }
 
-@app.post("/api/upload", response_model=dict)
-async def upload_document(file: UploadFile = File(...)):
+@app.get("/api/processing-status/{file_id}")
+async def get_processing_status(file_id: str):
     """
-    Upload and process a document (PDF or DOCX)
+    Get processing status for a file
+    """
+    try:
+        progress = progress_service.get_progress(file_id)
+        if not progress:
+            raise HTTPException(status_code=404, detail="Processing status not found")
+        
+        return {
+            "success": True,
+            "file_id": progress.file_id,
+            "status": progress.status,
+            "percentage": progress.progress,
+            "message": progress.current_step,
+            "current_step_number": progress.current_step_number,
+            "total_steps": progress.total_steps,
+            "estimated_remaining": progress.estimated_remaining,
+            "error_message": progress.error_message
+        }
+    except Exception as e:
+        logger.error(f"Processing status error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+def process_document_async(file_path: str, file_id: str, processing_id: str):
+    """Background task to process document with progress tracking"""
+    try:
+        # Start progress tracking
+        progress_service.start_processing(processing_id, total_steps=3)
+        
+        # Process document with progress tracking
+        result = qa_service.process_document_with_progress(str(file_path), file_id, processing_id)
+        
+        if result["success"]:
+            progress_service.complete_processing(processing_id)
+        else:
+            progress_service.set_error(processing_id, result.get("error", "Unknown error"))
+            
+    except Exception as e:
+        logger.error(f"Background processing error: {e}")
+        progress_service.set_error(processing_id, str(e))
+    finally:
+        # Clean up progress after 5 minutes
+        import threading
+        timer = threading.Timer(300, lambda: progress_service.cleanup_progress(processing_id))
+        timer.start()
+@app.post("/api/upload", response_model=dict)
+async def upload_document(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
+    """
+    Upload and process a document (PDF or DOCX) with progress tracking
     """
     try:
         # Validate file type
@@ -67,31 +126,67 @@ async def upload_document(file: UploadFile = File(...)):
                 detail=f"Unsupported file type. Allowed: {', '.join(allowed_extensions)}"
             )
         
-        # Save uploaded file
+        # Generate unique processing ID
+        processing_id = str(uuid.uuid4())
         file_id = Path(file.filename).stem
         upload_path = Path("data/uploads") / file.filename
         
+        # Save uploaded file
         with open(upload_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         
         logger.info(f"File uploaded: {file.filename}")
         
-        # Process document
-        result = qa_service.process_document(str(upload_path), file_id)
+        # Start background processing
+        background_tasks.add_task(process_document_async, upload_path, file_id, processing_id)
         
-        if result["success"]:
-            return {
-                "success": True,
-                "message": f"Document '{file.filename}' processed successfully",
-                "file_id": file_id,
-                "metadata": result["metadata"]
-            }
-        else:
-            raise HTTPException(status_code=500, detail=result["error"])
+        return {
+            "success": True,
+            "message": f"Document '{file.filename}' upload started",
+            "file_id": file_id,
+            "progress_id": processing_id,
+            "status_url": f"/api/processing-status/{processing_id}"
+        }
             
     except Exception as e:
         logger.error(f"Upload error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/chat", response_model=ChatResponse)
+async def chat(request: ChatRequest):
+    """
+    General chat endpoint for conversational AI without documents
+    """
+    try:
+        if not request.message.strip():
+            raise HTTPException(status_code=400, detail="Message cannot be empty")
+        
+        if not mistral_llm.is_ready():
+            raise HTTPException(status_code=503, detail="Model not loaded yet. Please wait.")
+        
+        # Generate response using the LLM service directly
+        response_text = mistral_llm.generate_response(
+            prompt=request.message,
+            max_tokens=256,
+            temperature=0.7
+        )
+        
+        return ChatResponse(
+            success=True,
+            response=response_text,
+            model_info={
+                "model_name": "Mistral 7B Instruct",
+                "tokens_used": len(response_text.split()),  # Approximate token count
+                "context_length": mistral_llm.n_ctx
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"Chat error: {e}")
+        return ChatResponse(
+            success=False,
+            error=str(e)
+        )
 
 @app.post("/api/question", response_model=QuestionResponse)
 async def ask_question(request: QuestionRequest):

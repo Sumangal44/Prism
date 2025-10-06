@@ -4,6 +4,19 @@ Text chunking utilities for document processing
 import re
 from typing import List, Dict
 import tiktoken
+import sys
+from pathlib import Path
+
+# Add the backend directory to the Python path for progress service
+backend_dir = Path(__file__).parent.parent
+if str(backend_dir) not in sys.path:
+    sys.path.insert(0, str(backend_dir))
+
+try:
+    from app.services.progress_service import progress_service
+except ImportError:
+    # Fallback if progress service is not available
+    progress_service = None
 
 class DocumentChunker:
     def __init__(self, chunk_size: int = 1000, chunk_overlap: int = 200, model_name: str = "gpt-3.5-turbo"):
@@ -116,25 +129,47 @@ class DocumentChunker:
         overlap_tokens = tokens[-max_tokens:]
         return self.tokenizer.decode(overlap_tokens)
     
-    def chunk_document_pages(self, pages: List[Dict]) -> List[Dict]:
+    def chunk_document_pages(self, pages: List[Dict], progress_file_id: str = None) -> List[Dict]:
         """
         Chunk a document that's already split into pages
         
         Args:
             pages: List of page dictionaries from parse_pdf.py
+            progress_file_id: File ID for progress tracking
             
         Returns:
             List of chunk dictionaries
         """
-        all_chunks = []
+        if progress_service and progress_file_id:
+            progress_service.update_progress(progress_file_id, 2, "Starting text chunking...")
         
-        for page in pages:
+        all_chunks = []
+        total_pages = len(pages)
+        
+        for page_idx, page in enumerate(pages):
+            if progress_service and progress_file_id:
+                page_progress = (page_idx / total_pages) * 90  # 90% of step 2
+                progress_service.update_progress(
+                    progress_file_id, 
+                    2, 
+                    f"Chunking page {page_idx + 1} of {total_pages}", 
+                    page_progress
+                )
+            
             page_chunks = self.chunk_text(page["text"], page["file_id"])
             # Add page information to chunks
             for chunk in page_chunks:
                 chunk["page"] = page["page"]
                 chunk["source_page"] = page["page"]
             all_chunks.extend(page_chunks)
+        
+        if progress_service and progress_file_id:
+            progress_service.update_progress(
+                progress_file_id, 
+                2, 
+                f"Chunking completed - {len(all_chunks)} chunks created", 
+                100
+            )
         
         return all_chunks
 

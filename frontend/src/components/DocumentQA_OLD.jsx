@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { MessageCircle, Send, FileText, Upload, Bot, User, Copy, ThumbsUp, ThumbsDown, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { addToSearchHistory } from './SearchHistory'
+import HardwareToggle from './HardwareToggle'
 
 const DocumentQA = () => {
   const [messages, setMessages] = useState([])
@@ -54,43 +54,22 @@ const DocumentQA = () => {
 
       const data = await response.json()
       if (data.success) {
-        toast.success(`Document "${file.name}" uploaded successfully! Processing in background...`)
-        
-        // Since the upload is now async, we only get basic info initially
+        toast.success(`Document "${file.name}" uploaded and processed successfully!`)
         setUploadedDocuments(prev => [...prev, {
           file_id: data.file_id,
-          file_name: file.name, // Use the original file name
-          processing: true, // Mark as still processing
-          progress_id: data.progress_id
+          file_name: data.metadata.file_name,
+          num_pages: data.metadata.num_pages,
+          num_chunks: data.metadata.num_chunks
         }])
         
         // Add system message
         const systemMessage = {
           id: Date.now(),
           type: 'system',
-          content: `Document "${file.name}" has been uploaded and is being processed. You'll be notified when it's ready for questions.`,
+          content: `Document "${file.name}" has been processed and is ready for questions. It contains ${data.metadata.num_pages} pages and ${data.metadata.num_chunks} text chunks.`,
           timestamp: new Date().toLocaleTimeString()
         }
         setMessages(prev => [...prev, systemMessage])
-        
-        // TODO: Poll for processing completion using data.progress_id
-        // For now, we'll just mark it as ready after a delay
-        setTimeout(() => {
-          setUploadedDocuments(prev => prev.map(doc => 
-            doc.file_id === data.file_id 
-              ? { ...doc, processing: false }
-              : doc
-          ))
-          
-          const completionMessage = {
-            id: Date.now() + 1,
-            type: 'system',
-            content: `Document "${file.name}" has been processed and is ready for questions.`,
-            timestamp: new Date().toLocaleTimeString()
-          }
-          setMessages(prev => [...prev, completionMessage])
-        }, 3000) // 3 second delay for demo
-        
       } else {
         toast.error(data.detail || 'Failed to upload document')
       }
@@ -116,7 +95,6 @@ const DocumentQA = () => {
     }
 
     setMessages(prev => [...prev, userMessage])
-    const currentInput = inputValue
     setInputValue('')
     setIsLoading(true)
 
@@ -127,8 +105,8 @@ const DocumentQA = () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          question: currentInput,
-          file_id: selectedDocument ? parseInt(selectedDocument) : null
+          question: inputValue,
+          file_id: selectedDocument || null
         }),
       })
 
@@ -137,23 +115,11 @@ const DocumentQA = () => {
       const assistantMessage = {
         id: Date.now() + 1,
         type: 'assistant',
-        content: data.success ? data.answer : data.error || 'Sorry, I could not answer your question.',
-        timestamp: new Date().toLocaleTimeString(),
+        content: data.success ? data.answer : data.error || 'Sorry, I could not process your question.',
         sources: data.sources || [],
-        context_used: data.context_used || false,
-        processing_time: data.processing_time || null
-      }
-
-      // Add to search history if successful
-      if (data.success) {
-        const selectedDoc = uploadedDocuments.find(doc => doc.file_id === selectedDocument)
-        addToSearchHistory(
-          'document',
-          currentInput,
-          data.answer,
-          data.sources || [],
-          selectedDoc ? `Document: ${selectedDoc.file_name}` : 'General query'
-        )
+        chunks_used: data.chunks_used || 0,
+        timestamp: new Date().toLocaleTimeString(),
+        success: data.success
       }
 
       setMessages(prev => [...prev, assistantMessage])
@@ -165,13 +131,12 @@ const DocumentQA = () => {
       const errorMessage = {
         id: Date.now() + 1,
         type: 'assistant',
-        content: 'Sorry, there was an error processing your question. Please check if the backend is running and try again.',
+        content: 'Sorry, there was an error processing your question. Please try again.',
         timestamp: new Date().toLocaleTimeString(),
-        sources: [],
-        context_used: false
+        success: false
       }
       setMessages(prev => [...prev, errorMessage])
-      toast.error('Connection error - check backend server')
+      toast.error('Error sending message')
       console.error('Send message error:', error)
     } finally {
       setIsLoading(false)
@@ -231,7 +196,7 @@ const DocumentQA = () => {
               <div className="space-y-1 max-h-24 sm:max-h-32 overflow-y-auto">
                 {message.sources.slice(0, 3).map((source, index) => (
                   <div key={index} className="text-xs bg-gray-50 rounded px-2 py-1 truncate">
-                    📄 {source.file_name || 'Document'} - Page {source.page || 0}
+                    📄 {source.file_name} - Page {source.page}
                   </div>
                 ))}
                 {message.sources.length > 3 && (
@@ -325,21 +290,19 @@ const DocumentQA = () => {
                       : 'border-gray-200 hover:bg-gray-50'
                   }`}
                 >
-                  <div className="font-medium text-xs sm:text-sm truncate" title={doc.file_name || 'Document'}>
-                    {doc.file_name || 'Document'}
-                    {doc.processing && (
-                      <span className="ml-2 text-blue-500">
-                        <Loader2 className="w-3 h-3 inline animate-spin" />
-                      </span>
-                    )}
-                  </div>
+                  <div className="font-medium text-xs sm:text-sm truncate" title={doc.file_name}>{doc.file_name}</div>
                   <div className="text-xs text-gray-500">
-                    {doc.processing ? 'Processing...' : `${doc.num_pages || 0}p • ${doc.num_chunks || 0}c`}
+                    {doc.num_pages}p • {doc.num_chunks}c
                   </div>
                 </button>
               ))}
             </div>
           )}
+        </div>
+        
+        {/* Hardware Toggle */}
+        <div className="p-2 sm:p-3 lg:p-4 border-t border-gray-200 hidden lg:block">
+          <HardwareToggle />
         </div>
       </div>
 

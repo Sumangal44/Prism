@@ -1,14 +1,62 @@
 import { motion } from 'framer-motion'
-import { Search, Upload, FileText, MessageCircle, History, BarChart3 } from 'lucide-react'
+import { Search, Upload, FileText, MessageCircle, History, Image, Mic } from 'lucide-react'
+import { useState, useEffect } from 'react'
 
 const Sidebar = ({ activeTab, setActiveTab, isOpen, onClose }) => {
+  const [fileCounts, setFileCounts] = useState({
+    documents: 0,
+    images: 0,
+    audio: 0
+  })
+
+  // Fetch file counts from API
+  const fetchFileCounts = async () => {
+    try {
+      // Fetch documents count
+      const documentsResponse = await fetch('http://localhost:8000/api/documents')
+      const documentsData = await documentsResponse.json()
+      const documentsCount = documentsData.success ? documentsData.count || 0 : 0
+
+      // Note: Images and Audio endpoints would need to be implemented in backend
+      // For now, we'll get counts from localStorage if available
+      const searchHistory = localStorage.getItem('prism_search_history')
+      let imageCount = 0
+      let audioCount = 0
+      
+      if (searchHistory) {
+        try {
+          const history = JSON.parse(searchHistory)
+          imageCount = history.filter(item => item.type === 'image').length
+          audioCount = history.filter(item => item.type === 'audio').length
+        } catch (error) {
+          console.error('Error parsing search history:', error)
+        }
+      }
+
+      setFileCounts({
+        documents: documentsCount,
+        images: imageCount,
+        audio: audioCount
+      })
+    } catch (error) {
+      console.error('Error fetching file counts:', error)
+      // Keep counts at 0 if there's an error
+    }
+  }
+
+  useEffect(() => {
+    fetchFileCounts()
+    // Refresh counts every 10 seconds
+    const interval = setInterval(fetchFileCounts, 10000)
+    return () => clearInterval(interval)
+  }, [])
   const menuItems = [
     { id: 'search', label: 'Search', icon: Search },
     { id: 'qa', label: 'Document Q&A', icon: MessageCircle },
     { id: 'upload', label: 'Upload Files', icon: Upload },
-    { id: 'files', label: 'My Files', icon: FileText },
+    { id: 'images', label: 'Image Q&A', icon: Image },
+    { id: 'audio', label: 'Audio Q&A', icon: Mic },
     { id: 'history', label: 'Search History', icon: History },
-    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
   ]
 
   return (
@@ -68,15 +116,15 @@ const Sidebar = ({ activeTab, setActiveTab, isOpen, onClose }) => {
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Documents</span>
-              <span className="font-medium">24</span>
+              <span className="font-medium">{fileCounts.documents}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Images</span>
-              <span className="font-medium">18</span>
+              <span className="font-medium">{fileCounts.images}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Audio Files</span>
-              <span className="font-medium">7</span>
+              <span className="font-medium">{fileCounts.audio}</span>
             </div>
           </div>
         </div>

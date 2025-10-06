@@ -6,42 +6,107 @@ import toast from 'react-hot-toast'
 
 const FileUpload = ({ onFileUpload, uploadedFiles }) => {
   const [uploading, setUploading] = useState(false)
+  const [processingProgress, setProcessingProgress] = useState({})
+
+  // Function to poll for processing progress
+  const pollProgress = async (progressId, fileName) => {
+    try {
+      const response = await fetch(`http://localhost:8000/api/processing-status/${progressId}`)
+      
+      if (!response.ok) {
+        console.error(`Progress polling failed for ${fileName}: ${response.status}`)
+        return
+      }
+      
+      const progress = await response.json()
+      
+      if (progress && progress.file_id) {
+        setProcessingProgress(prev => ({
+          ...prev,
+          [progressId]: {
+            status: progress.status || 'processing',
+            percentage: progress.progress || 0,
+            message: progress.current_step || 'Processing...'
+          }
+        }))
+
+        // If completed or failed, stop polling
+        if (progress.status === 'completed' || progress.status === 'error') {
+          return
+        }
+
+        // Continue polling every 1 second
+        setTimeout(() => pollProgress(progressId, fileName), 1000)
+      }
+    } catch (error) {
+      console.error('Error polling progress:', error)
+      // Set error state instead of failing silently
+      setProcessingProgress(prev => ({
+        ...prev,
+        [progressId]: {
+          status: 'error',
+          percentage: 0,
+          message: `Error checking progress: ${error.message}`
+        }
+      }))
+    }
+  }
 
   const onDrop = useCallback(async (acceptedFiles) => {
     if (acceptedFiles.length === 0) return;
 
-    setUploading(true);
-    const uploadPromises = acceptedFiles.map(async (file) => {
-      const formData = new FormData();
-      formData.append('file', file);
-
-      try {
-        const response = await fetch('http://localhost:8000/api/upload', {
-          method: 'POST',
-          body: formData,
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.detail || 'Upload failed');
-        }
-
-        const result = await response.json();
-        toast.success(`${file.name} uploaded successfully!`);
-        return { ...file, ...result }; // Combine file info with backend response
-      } catch (error) {
-        toast.error(`Upload failed for ${file.name}: ${error.message}`);
-        return null;
-      }
-    });
-
     try {
+      setUploading(true);
+      const uploadPromises = acceptedFiles.map(async (file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+          const response = await fetch('http://localhost:8000/api/upload', {
+            method: 'POST',
+            body: formData,
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || 'Upload failed');
+          }
+
+          const result = await response.json();
+          
+          // If we got a progress_id, start polling for progress
+          if (result.success && result.progress_id) {
+            setProcessingProgress(prev => ({
+              ...prev,
+              [result.progress_id]: {
+                status: 'started',
+                percentage: 0,
+                message: 'Upload completed, starting processing...'
+              }
+            }))
+            
+            // Start polling for progress
+            pollProgress(result.progress_id, file.name)
+          }
+          
+          toast.success(`${file.name} uploaded successfully!`);
+          return { ...file, ...result }; // Combine file info with backend response
+        } catch (error) {
+          console.error('Upload error:', error);
+          toast.error(`Upload failed for ${file.name}: ${error.message}`);
+          return null;
+        }
+      });
+
       const results = await Promise.all(uploadPromises);
       const successfulUploads = results.filter(result => result !== null);
       
-      if (onFileUpload) {
+      if (onFileUpload && successfulUploads.length > 0) {
         onFileUpload(successfulUploads);
       }
+    } catch (error) {
+      console.error('Critical upload error:', error);
+      toast.error(`Critical error during upload: ${error.message}`);
     } finally {
       setUploading(false);
     }
@@ -170,10 +235,44 @@ const FileUpload = ({ onFileUpload, uploadedFiles }) => {
                       {formatFileSize(file.size)}
                     </p>
                     <div className="mt-2">
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div className="bg-green-500 h-2 rounded-full w-full"></div>
-                      </div>
-                      <p className="text-xs text-green-600 mt-1">Processed</p>
+                      {file.progress_id && processingProgress[file.progress_id] ? (
+                        <div>
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div 
+                              className={`h-2 rounded-full transition-all duration-300 ${
+                                processingProgress[file.progress_id].status === 'completed' 
+                                  ? 'bg-green-500' 
+                                  : processingProgress[file.progress_id].status === 'error'
+                                  ? 'bg-red-500'
+                                  : 'bg-blue-500'
+                              }`}
+                              style={{ 
+                                width: `${processingProgress[file.progress_id].percentage || 0}%` 
+                              }}
+                            ></div>
+                          </div>
+                          <p className={`text-xs mt-1 ${
+                            processingProgress[file.progress_id].status === 'completed' 
+                              ? 'text-green-600' 
+                              : processingProgress[file.progress_id].status === 'error'
+                              ? 'text-red-600'
+                              : 'text-blue-600'
+                          }`}>
+                            {processingProgress[file.progress_id].status === 'completed' 
+                              ? 'Processing completed!' 
+                              : processingProgress[file.progress_id].status === 'error'
+                              ? `Error: ${processingProgress[file.progress_id].message}`
+                              : processingProgress[file.progress_id].message || 'Processing...'}
+                          </p>
+                        </div>
+                      ) : (
+                        <div>
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div className="bg-green-500 h-2 rounded-full w-full"></div>
+                          </div>
+                          <p className="text-xs text-green-600 mt-1">Uploaded</p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

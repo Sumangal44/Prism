@@ -13,12 +13,7 @@ const SearchInterface = ({ onSearch, isLoading }) => {
     }
   }
 
-  const suggestedQueries = [
-    "Find budget information in my documents",
-    "What are the project timelines?",
-    "Summarize the key conclusions",
-    "Show me any risk assessments"
-  ]
+  const suggestedQueries = []
 
   return (
     <div className="search-container">

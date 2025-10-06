@@ -24,11 +24,12 @@ except ImportError as e:
     raise ImportError(f"Failed to import ingestion modules. Please ensure dependencies are installed: {e}")
 
 from .llm_service import mistral_llm
+from .progress_service import progress_service
 
 class DocumentQAService:
     def __init__(self, data_dir: str = "data"):
         """
-        Initialize Document Q&A service
+        Initialize Document Q&A service with performance optimizations
         
         Args:
             data_dir: Base directory for data storage
@@ -41,20 +42,22 @@ class DocumentQAService:
         self.uploads_dir.mkdir(parents=True, exist_ok=True)
         self.processed_dir.mkdir(parents=True, exist_ok=True)
         
-        # In-memory document store (replace with vector DB later)
+        # In-memory document store with caching
         self.document_chunks: Dict[str, List[Dict]] = {}
         self.document_metadata: Dict[str, Dict] = {}
+        self._chunks_cache: Dict[str, List[Dict]] = {}  # Performance cache
         
         # Load existing processed documents on startup
         self._load_existing_documents()
     
-    def process_document(self, file_path: str, file_id: str = None) -> Dict:
+    def process_document_with_progress(self, file_path: str, file_id: str = None, progress_file_id: str = None) -> Dict:
         """
-        Process a document and store its chunks
+        Process a document and store its chunks with progress tracking
         
         Args:
             file_path: Path to the document file
             file_id: Unique identifier for the document
+            progress_file_id: Unique identifier for progress tracking
             
         Returns:
             Processing result with metadata
@@ -68,13 +71,22 @@ class DocumentQAService:
             
             logger.info(f"Processing document: {file_path}")
             
-            # Parse document into pages
-            pages = parse_document(str(file_path), file_id=1)
+            # Step 1: Parse document into pages (with progress tracking)
+            if progress_file_id:
+                progress_service.update_progress(progress_file_id, 1, "Starting document parsing...")
             
-            # Chunk the document
-            chunks = document_chunker.chunk_document_pages(pages)
+            pages = parse_document(str(file_path), file_id=1, progress_file_id=progress_file_id)
             
-            # Store chunks and metadata
+            # Step 2: Chunk the document (with progress tracking)
+            if progress_file_id:
+                progress_service.update_progress(progress_file_id, 2, "Starting text chunking...")
+            
+            chunks = document_chunker.chunk_document_pages(pages, progress_file_id=progress_file_id)
+            
+            # Step 3: Store chunks and metadata
+            if progress_file_id:
+                progress_service.update_progress(progress_file_id, 3, "Storing processed data...")
+            
             self.document_chunks[file_id] = chunks
             self.document_metadata[file_id] = {
                 "file_name": file_path.name,
@@ -87,6 +99,9 @@ class DocumentQAService:
             # Save processed data
             self._save_processed_document(file_id, chunks, self.document_metadata[file_id])
             
+            if progress_file_id:
+                progress_service.update_progress(progress_file_id, 3, "Processing completed", 100)
+            
             logger.info(f"Document processed successfully: {len(chunks)} chunks created")
             
             return {
@@ -97,19 +112,21 @@ class DocumentQAService:
             
         except Exception as e:
             logger.error(f"Error processing document: {e}")
+            if progress_file_id:
+                progress_service.set_error(progress_file_id, str(e))
             return {
                 "success": False,
                 "error": str(e)
             }
     
-    def answer_question(self, question: str, file_id: str = None, max_chunks: int = 5) -> Dict:
+    def answer_question(self, question: str, file_id: str = None, max_chunks: int = 3) -> Dict:
         """
-        Answer a question based on processed documents
+        Answer a question based on processed documents with speed optimizations
         
         Args:
             question: User question
             file_id: Specific document to search (None for all documents)
-            max_chunks: Maximum number of chunks to include in context
+            max_chunks: Maximum number of chunks to include in context (reduced for speed)
             
         Returns:
             Answer with sources and metadata
@@ -121,8 +138,13 @@ class DocumentQAService:
                     "error": "LLM model not loaded. Please check model file path."
                 }
             
-            # Get relevant chunks
-            relevant_chunks = self._find_relevant_chunks(question, file_id, max_chunks)
+            # Get relevant chunks with caching
+            cache_key = f"{question[:50]}_{file_id}_{max_chunks}"
+            if cache_key in self._chunks_cache:
+                relevant_chunks = self._chunks_cache[cache_key]
+            else:
+                relevant_chunks = self._find_relevant_chunks(question, file_id, max_chunks)
+                self._chunks_cache[cache_key] = relevant_chunks
             
             if not relevant_chunks:
                 return {
@@ -130,10 +152,10 @@ class DocumentQAService:
                     "error": "No relevant documents found. Please upload and process documents first."
                 }
             
-            # Build context from chunks
-            context = self._build_context(relevant_chunks)
+            # Build optimized context for speed and completeness balance
+            context = self._build_context(relevant_chunks, max_length=1000)
             
-            # Generate answer
+            # Generate answer with optimized settings
             answer = mistral_llm.answer_question(context, question)
             
             # Extract sources
@@ -199,13 +221,27 @@ class DocumentQAService:
         
         return scored_chunks[:max_chunks]
     
-    def _build_context(self, chunks: List[Dict]) -> str:
-        """Build context string from relevant chunks"""
+    def _build_context(self, chunks: List[Dict], max_length: int = 1000) -> str:
+        """Build context string from relevant chunks optimized for speed and completeness"""
         context_parts = []
+        current_length = 0
+        
         for i, chunk in enumerate(chunks, 1):
             chunk_text = chunk["text"]
             page_info = f"Page {chunk.get('page', 'Unknown')}" if 'page' in chunk else ""
-            context_parts.append(f"[Chunk {i}] {page_info}\n{chunk_text}\n")
+            
+            # Optimize chunk size for speed while ensuring key information is preserved
+            if len(chunk_text) > 500:
+                chunk_text = chunk_text[:500] + "..."
+                
+            chunk_entry = f"[Chunk {i}] {page_info}\n{chunk_text}\n"
+            
+            # Check if adding this chunk would exceed max_length
+            if current_length + len(chunk_entry) > max_length:
+                break
+                
+            context_parts.append(chunk_entry)
+            current_length += len(chunk_entry)
         
         return "\n".join(context_parts)
     
